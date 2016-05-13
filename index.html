@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>domvm issue 74</title>
+    <script src="domvm.min.js" type="text/javascript"></script>
+    <script src="realtimechart.js" type="text/javascript"></script>
+</head>
+<body>
+  <h1>domvm issue 74</h1>
+
+  <script type="text/javascript">
+    // See the two TODO tags for suggested fixes
+    // 1st TODO on line 30-31
+    // 2nd TODO on line 146-147
+
+    var tickers = 0 // setTimeout loops running
+    var insert_counter = 0
+    var nodes_counter = 0
+
+    function initRealtimeChart (node, opts) {
+      insert_counter++
+      node.el && nodes_counter++
+
+      //var canvas = node.el
+      var canvas = node.el
+      console.log('insert_counter: %s', insert_counter)
+      console.log('nodes_counter: %s', nodes_counter)
+
+      // TODO uncomment to also fix issue
+      //if (!node.el) return
+
+      console.log(canvas)
+
+      // default opts
+      var defaults = {
+        interval: 5000,
+        offset: 500,
+        size: 'auto',
+        line_width: 8
+      }
+
+      opts = Object.assign(defaults, opts || {})
+
+      var ctrl = realtimechart(canvas, opts)
+
+      // insert fake data
+      var ticks = 0
+      function tick () {
+        ticks++
+
+        var time = Date.now() - 100 * Math.random()
+        var n = Math.random() * 10
+
+        ctrl.addData(n, time)
+
+        setTimeout(tick, 25)
+      }
+      console.log("TICKERS RUNNING: " + ++tickers)
+      setTimeout(tick, 25)
+
+      var _lastInnerWidth = window.innerWidth
+      window.addEventListener('resize', function () {
+        if (_lastInnerWidth !== window.innerWidth) {
+          _lastInnerWidth = window.innerWidth
+          console.log('canvas resized!')
+          ctrl.addData = ctrl.resize().addData
+        }
+      })
+    } // initRealtimeChart
+
+    function Chart (vm, opts) {
+      console.log('Chart')
+
+      function didInsert (node) {
+        initRealtimeChart(node, opts)
+      }
+
+      return function () {
+        return ['div',
+          ['canvas', {_hooks: { didInsert: didInsert }}]
+        ]
+      }
+    }
+
+    function Dashboard (vm) {
+      console.log('Dashboard')
+      return function () {
+        return ['div',
+          ['div', [Chart, { interval: 2500, line_width: 3 }]],
+          ['div', [Chart, { interval: 5000, line_width: 8 }]],
+          ['div', [Chart, { interval: 60000, line_width: 2 }]],
+          ['div', [Chart, { interval: 20000, line_width: 1 }]]
+        ]
+      }
+    } // Dashboard
+
+    var routes = [{ path: '/', name: 'Dashboard', view: Dashboard }]
+
+    function Router (router, deps) {
+      console.log('Router')
+
+      function App (vm, store) {
+        console.log('App')
+        return function () {
+          var path = router.location().path
+          var currentRoute = routes.find(function (route) {
+            return route.path === path
+          })
+
+          return ['div',
+            [currentRoute && currentRoute.view || function () {
+              console.log('404')
+              return function () { return ['div', '404 - not found'] }
+            }]
+          ]
+        }
+      } // App
+
+      var vm = domvm.view(App)
+
+      router.config({
+        useHist: false,
+        root: '/',
+        init: function () {
+          console.log('router init')
+          vm.mount(document.body)
+        }
+      })
+
+      return {
+        dashboard: {
+          path: '/',
+          onenter: function () {
+            console.log('onenter / redraw')
+            vm.redraw()
+          }
+        }
+      }
+
+    } // Router
+
+    var router = domvm.route(Router, {})
+    console.log('router refresh')
+
+    // TODO comment below line to fix issue
+    router.refresh()
+
+  </script>
+
+</body>
+</html>
